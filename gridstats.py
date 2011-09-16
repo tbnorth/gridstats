@@ -233,25 +233,39 @@ class ZonalStats(object):
 
     def __init__(self, opt=None):
 
-        self.opt = opt
+        self.memrefs = []
+        
+        if not opt:
+            self.opt, dummy = getOptArg(None)
+        else:
+            self.opt = opt
         self.init_from_opt()
 
+        # register all of the GDAL drivers
+        gdal.AllRegister()
+
+    def __del__(self):
+
+        for i in self.memrefs:
+            if hasattr(i, 'destroy'):
+                print 'destroying', i
+                i.destroy()
+
+        print "ZonalStats finished, now let's segfault..."
     def set_grid(self, grid):
         
-        self.grid = grid
+        self.grid = gdal.Open(grid, gdalconst.GA_ReadOnly)
+        if self.grid is None:
+            print('Could not open {0}'.format(grid))
+            sys.exit(1)
+            
+        self.memrefs.append(self.grid)
+            
+        self.gridfilename = grid
         self.gc = GridClipper(self.grid)
-    def set_shapes(self):
         
-        raise NotImplemented
-
-
-
-    def init_from_opt(self):
-        
-        if not self.opt.output:
-            self.out = sys.stdout
-        else:
-            self.out = open(self.opt.output, 'w')
+        self.memrefs.append(self.gc)
+    def set_shapes(self, shapes):
 
         self.fieldnames = [i if i != '#' else 'REC_NUM' for i in self.opt.fields]
 
@@ -264,29 +278,29 @@ class ZonalStats(object):
             self.out_fields = stats
 
         self.fieldnames.extend(self.out_fields)
-        self.out.write("%s\n" % ','.join(self.fieldnames))
+
+        self.datasource = self.driverSHPogr.Open(shapes, 0)
+        if self.datasource is None:
+            print('Could not open {0}'.format(shapes))
+            sys.exit(1)
+        self.memrefs.append(self.datasource)
+    def init_from_opt(self):
+        
+        if not self.opt.output:
+            self.out = sys.stdout
+        else:
+            self.out = open(self.opt.output, 'w')
 
         # open the data source
-        print self.opt.shapes
-        self.datasource = self.driverSHPogr.Open(self.opt.shapes, 0)
-        if self.datasource is None:
-            print('Could not open {0}'.format(self.opt.shapes))
-            sys.exit(1)
+        self.set_shapes(self.opt.shapes)
 
+        # open the image
+        self.set_grid(self.opt.grid)
+
+    def run(self):
         # get the data layer
         self.layer = self.datasource.GetLayer()
 
-        # register all of the GDAL drivers
-        gdal.AllRegister()
-
-        # open the image
-        img = gdal.Open(self.opt.grid, gdalconst.GA_ReadOnly)
-        if img is None:
-            print('Could not open {0}'.format(self.opt.grid))
-            sys.exit(1)
-        self.set_grid(img)
-
-    def run(self):
         gc = self #X ZonalStats(img, opt)
         img = self.grid
 
@@ -303,11 +317,12 @@ class ZonalStats(object):
         # yorg = yorg_orig + rows * ysz
         # assert yorg_orig < yorg
 
+        self.out.write("%s\n" % ','.join(self.fieldnames))
+
         # loop through the features in the layer
+        self.layer.ResetReading()
         feature = self.layer.GetNextFeature()
         cnt = 0
-
-        memrefs = []
 
         while feature:
 
@@ -370,10 +385,9 @@ class ZonalStats(object):
                 print("Records: {0}".format(cnt))
 
         # close the data source
-        self.datasource.Destroy()
+        #X self.datasource.Destroy()
 
-        print "Run finished, now let's segfault..."
-        self.out.close()
+        self.out.flush()
 
         """ 
         # dump output, R code
@@ -501,13 +515,6 @@ class ZonalStats(object):
         return data
 
 
-    def REMOVE_get_length_2D(self, coord):
-        """Return the 2D length of the line string with coords
-        listed in coord
-        """
-        return sum([sqrt(pow(coord[i][0]-coord[i+1][0], 2)+
-                           pow(coord[i][1]-coord[i+1][1], 2))
-                           for i in range(len(coord)-1)])
 def main():
 
     opt,arg = getOptArg()
@@ -519,6 +526,20 @@ def main():
     zs = ZonalStats(opt)
     zs.run()
 
+    zs.set_grid('pystar-test-data/testgrid')
+    zs.run()
+
+    #! del zs  # causes segfault
+
+    zs2 = ZonalStats()
+    zs2.opt.fields = '#', 'id'
+    
+    # produces a lot of output, seeing testgrid is really continuous
+    # zs2.opt.categorical = True
+    
+    zs2.set_shapes('pystar-test-data/testshapes2.shp')
+    zs2.set_grid('pystar-test-data/testgrid')
+    zs2.run()
 if __name__ == "__main__":
 
     main()
