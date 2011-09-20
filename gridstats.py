@@ -39,6 +39,14 @@ def make_parser():
     parser.add_option("--categorical", default=False, action='store_true',
         help="Return count,class for categorical grids")
 
+    parser.add_option("--constant", action="append", default=[],
+        help="Add a constant value to the output, e.g. "
+             "--constant=batch,7 to add column 'batch' to the "
+             "output with a constant value of 7")
+
+    parser.add_option("--no-header", default=False, action='store_true',
+        help="Append to output, don't write header line")
+
     parser.add_option("--run-tests", default=False, action='store_true',
         help="Run tests, ignoring all other inputs / parameters")
 
@@ -80,6 +88,9 @@ def getOptArg(args=None):
     if arg:
         opt.shapes = arg[0]
         opt.grid = arg[1]
+    else:
+        opt.shapes = None
+        opt.grid = None
 
     return opt, arg
 def clip(val, rng):
@@ -109,25 +120,27 @@ class GridClipper:
     def get_bounds(self, geom):
         """work out the cell parameters to bound geom in our grid"""
 
+        padding = 2
+
         minx, maxx, miny, maxy = geom.GetEnvelope()
 
         # how many columns over do we start
         fcols = int((minx - self.xorg) / self.xsz)
         # add some padding
-        fcols -= 2
+        fcols -= padding
         # how many columns over do we end
         fcole = int((maxx - self.xorg) / self.xsz)
         # add some padding
-        fcole += 2
+        fcole += padding
 
         # how many rows down do we start
         frows = int((self.yorg - maxy) / -self.ysz)
         # add some padding
-        frows -= 2
+        frows -= padding
         # how many rows down do we end
         frowe = int((self.yorg - miny) / -self.ysz)
         # add some padding
-        frowe += 2
+        frowe += padding
 
         # clip to boundaries of data grid
         fcols = clip(fcols, self.img.RasterXSize)
@@ -141,6 +154,9 @@ class GridClipper:
 
         ans = type('o', (), {})
 
+        ans.padding = padding
+        ans.xsz = self.xsz
+        ans.ysz = self.ysz
         ans.minx = minx
         ans.maxx = maxx
         ans.miny = miny
@@ -254,6 +270,9 @@ class ZonalStats(object):
         print "ZonalStats finished, now let's segfault..."
     def set_grid(self, grid):
         
+        if not grid:
+            return
+        
         self.grid = gdal.Open(grid, gdalconst.GA_ReadOnly)
         if self.grid is None:
             print('Could not open {0}'.format(grid))
@@ -266,6 +285,9 @@ class ZonalStats(object):
         
         self.memrefs.append(self.gc)
     def set_shapes(self, shapes):
+        
+        if not shapes:
+            return
 
         self.fieldnames = [i if i != '#' else 'REC_NUM' for i in self.opt.fields]
 
@@ -278,6 +300,9 @@ class ZonalStats(object):
             self.out_fields = stats
 
         self.fieldnames.extend(self.out_fields)
+        
+        for i in self.opt.constant:
+            self.fieldnames.append(i.split(',',1)[0])
 
         self.datasource = self.driverSHPogr.Open(shapes, 0)
         if self.datasource is None:
@@ -289,7 +314,7 @@ class ZonalStats(object):
         if not self.opt.output:
             self.out = sys.stdout
         else:
-            self.out = open(self.opt.output, 'w')
+            self.out = open(self.opt.output, 'a' if self.opt.no_header else 'w')
 
         # open the data source
         self.set_shapes(self.opt.shapes)
@@ -317,7 +342,8 @@ class ZonalStats(object):
         # yorg = yorg_orig + rows * ysz
         # assert yorg_orig < yorg
 
-        self.out.write("%s\n" % ','.join(self.fieldnames))
+        if not self.opt.no_header:
+            self.out.write("%s\n" % ','.join(self.fieldnames))
 
         # loop through the features in the layer
         self.layer.ResetReading()
@@ -353,11 +379,15 @@ class ZonalStats(object):
 
                     output = list(output_base)
                     output.extend([("%20.10g"%i).strip() for i in result])
+                    for i in self.opt.constant:
+                        output.append(i.split(',',1)[-1])
                     self.out.write("%s\n" % ','.join(output))
 
             if not geom:
                 result = [-9999]*len(self.out_fields)
                 output.extend([("%20.10g"%i).strip() for i in result])
+                for i in self.opt.constant:
+                    output.append(i.split(',',1)[-1])
                 out.write("%s\n" % ','.join(output))
             elif self.opt.categorical:
                 multi_out(lambda: gc.getStatsCategorical(geom))
@@ -517,16 +547,24 @@ class ZonalStats(object):
 
 def main():
 
-    opt,arg = getOptArg()
+    opt,arg = getOptArg(sys.argv[1:])
 
     if opt.run_tests:
         unittest.main(argv=[sys.argv[0], '--verbose'])
         return
+        
+    zs = ZonalStats(opt)
+    zs.run()
 
+    return
+
+    opt.constant = ['batch,7']
     zs = ZonalStats(opt)
     zs.run()
 
     zs.set_grid('pystar-test-data/testgrid')
+    zs.opt.constant = ['batch,42']
+    zs.opt.no_header = True
     zs.run()
 
     #! del zs  # causes segfault
@@ -537,6 +575,7 @@ def main():
     # produces a lot of output, seeing testgrid is really continuous
     # zs2.opt.categorical = True
     
+    zs2.opt.constant = ['otters,several']
     zs2.set_shapes('pystar-test-data/testshapes2.shp')
     zs2.set_grid('pystar-test-data/testgrid')
     zs2.run()
