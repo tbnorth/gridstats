@@ -380,7 +380,11 @@ class ZonalStats(object):
                     output = list(output_base)
                     output.extend([("%20.10g"%i).strip() for i in result])
                     for i in self.opt.constant:
-                        output.append(i.split(',',1)[-1])
+                        if isinstance(i, dict):
+                            output.append(
+                                i[feature.GetFieldAsString(i['__lu_fld']).strip()])
+                        else:
+                            output.append(i.split(',',1)[-1])
                     self.out.write("%s\n" % ','.join(output))
 
             if not geom:
@@ -539,6 +543,9 @@ class ZonalStats(object):
 
         if self.opt.nodata:
             data = data[data != self.opt.nodata]
+        
+        # exclude the grid's interpretation of NODATA
+        data = data[numpy.isfinite(data)]
 
         self.data = data  # in case caller wants it
 
