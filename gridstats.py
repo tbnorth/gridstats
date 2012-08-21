@@ -13,6 +13,7 @@ higher res. grid and resample.
 import optparse
 import sys
 import os
+import time
 # import traceback
 
 from osgeo import gdal
@@ -116,7 +117,7 @@ class GridClipper:
         self.srs.SetWellKnownGeogCS('NAD83')
         self.srs_wkt = self.srs.ExportToWkt()
 
-        self.memrefs = []
+        #X self.memrefs = []
     def get_bounds(self, geom):
         """work out the cell parameters to bound geom in our grid"""
 
@@ -262,28 +263,54 @@ class ZonalStats(object):
 
     def __del__(self):
 
+        print "ZonalStats finished, segfault expected..."
+        
         for i in self.memrefs:
             if hasattr(i, 'destroy'):
-                print 'destroying', i
+                #D print 'destroying', i
                 i.destroy()
 
-        print "ZonalStats finished, now let's segfault..."
+        #D print 'start del ZonalStats'
+        cull = [i for i in dir(self) if 'a' <= i[0] <= 'z' and i != 'memrefs']
+        #D print cull
+        for i in cull:
+            #D print "del", i,
+            setattr(self, i, None)
+            #D print 'done'
+            
+        while self.memrefs:
+            #D print len(self.memrefs), 'to do'
+            #D print 'del', self.memrefs[0],
+            x = self.memrefs.pop(0)
+            #D print 'delisted',
+            del x
+            #D print 'done'
+            
+        #D print 'end del ZonalStats'
+        
     def set_grid(self, grid):
         
         if not grid:
             return
         
-        self.grid = gdal.Open(grid, gdalconst.GA_ReadOnly)
-        if self.grid is None:
-            print('Could not open {0}'.format(grid))
+        for i in range(3):
+            self.grid = gdal.Open(grid, gdalconst.GA_ReadOnly)
+            if self.grid is not None:
+                break
+            print('Could not open {}, attempt {}'.format(grid, i+1))
+            raw_input()
+            time.sleep(3)
+        else:
             sys.exit(1)
             
-        self.memrefs.append(self.grid)
+        # MEMREF not needed
+        # self.memrefs.append(self.grid)
             
         self.gridfilename = grid
         self.gc = GridClipper(self.grid)
         
-        self.memrefs.append(self.gc)
+        # MEMREF REQUIRED
+        # self.memrefs.append(self.gc)
     def set_shapes(self, shapes):
         
         if not shapes:
@@ -308,7 +335,8 @@ class ZonalStats(object):
         if self.datasource is None:
             print('Could not open {0}'.format(shapes))
             sys.exit(1)
-        self.memrefs.append(self.datasource)
+        # MEMREF not needed
+        # self.memrefs.append(self.datasource)
     def init_from_opt(self):
         
         if not self.opt.output:
@@ -382,7 +410,7 @@ class ZonalStats(object):
                     for i in self.opt.constant:
                         if isinstance(i, dict):
                             output.append(
-                                i[feature.GetFieldAsString(i['__lu_fld']).strip()])
+                                str(i[feature.GetFieldAsString(i['__lu_fld']).strip()]))
                         else:
                             output.append(i.split(',',1)[-1])
                     self.out.write("%s\n" % ','.join(output))
@@ -512,7 +540,8 @@ class ZonalStats(object):
         feat = ogr.Feature(outLayer.GetLayerDefn())
 
         # defer segfault to end of execution
-        self.gc.memrefs.append(feat)
+        # MEMREF REQUIRED
+        self.memrefs.append(feat)
 
         # copy shape into layer
         feat.SetGeometryDirectly(geom)
