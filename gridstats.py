@@ -29,7 +29,8 @@ import unittest
 def make_parser():
     """return OptionParser for this module"""
 
-    parser = optparse.OptionParser()
+    parser = optparse.OptionParser(
+        usage="usage: %prog [options] <shapefile> <grid>")
 
     parser.add_option("--fields", action="append", default=[],
         help="Include fields as identification in output, may be repeated "
