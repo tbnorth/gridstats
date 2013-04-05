@@ -46,6 +46,9 @@ def make_parser():
              "--constant=batch,7 to add column 'batch' to the "
              "output with a constant value of 7")
 
+    parser.add_option("--mask", default="", 
+        help="Name of another grid to mask the grid being processed")
+
     parser.add_option("--no-header", default=False, action='store_true',
         help="Append to output, don't write header line")
 
@@ -62,7 +65,7 @@ def make_parser():
         help="Stop after processing N shapes")
 
     parser.add_option("--save-masks", default="", metavar='FILENAME',
-        help="Specify pattern to save mask grids as geotiffs,"
+        help="Specify pattern to save mask (extraction) grids as geotiffs,"
         " e.g. 'mask%06d.tif'")
 
     parser.add_option("--save-data", default="", metavar='FILENAME',
@@ -351,6 +354,15 @@ class ZonalStats(object):
         # open the image
         self.set_grid(self.opt.grid)
 
+        if self.opt.mask:       
+            # build a subordinate ZonalStats to handle mask
+            mask_opt = deepcopy(self.opt)
+            mask_opt.grid = mask_opt.mask
+            mask_opt.mask = ''
+            mask_opt.output = '_mask_output.csv'
+            self.maskZS = ZonalStats(mask_opt)
+        else:
+            self.maskZS = None
     def run(self):
         # get the data layer
         self.layer = self.datasource.GetLayer()
