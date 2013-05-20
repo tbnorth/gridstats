@@ -355,14 +355,9 @@ class ZonalStats(object):
         self.set_grid(self.opt.grid)
 
         if self.opt.mask:       
-            # build a subordinate ZonalStats to handle mask
-            mask_opt = deepcopy(self.opt)
-            mask_opt.grid = mask_opt.mask
-            mask_opt.mask = ''
-            mask_opt.output = '_mask_output.csv'
-            self.maskZS = ZonalStats(mask_opt)
+            self.maskGC = GridClipper(gdal.Open(self.opt.mask, gdalconst.GA_ReadOnly))
         else:
-            self.maskZS = None
+            self.maskGC = None
     def run(self):
         # get the data layer
         self.layer = self.datasource.GetLayer()
@@ -579,9 +574,26 @@ class ZonalStats(object):
 
         # extract equivalent part of data grid
         rasterDat = self.gc.get_clip(bnds)
-
+        
         # get 1d array of the not-0 pixels
-        data = rasterDat[raster01 > 0]
+        if self.maskGC:
+            mask_bnds = self.maskGC.get_bounds(geom)
+            if (bnds.fcolcnt, bnds.frowcnt) != (mask_bnds.fcolcnt, mask_bnds.frowcnt):
+                # force bounds to be the same size
+                # FIXME, code used for NPC grid alignment might be better
+                mask_bnds.fcole = mask_bnds.fcols + (bnds.fcole-bnds.fcols)
+                mask_bnds.frowe = mask_bnds.frows + (bnds.frowe-bnds.frows)
+                mask_bnds.fcolcnt = mask_bnds.fcole-mask_bnds.fcols+1
+                mask_bnds.frowcnt = mask_bnds.frowe-mask_bnds.frows+1     
+                assert (bnds.fcolcnt, bnds.frowcnt) == (mask_bnds.fcolcnt, mask_bnds.frowcnt)     
+            mask = self.maskGC.get_clip(mask_bnds)
+            # print (raster01 > 0).sum(), (mask == 1).sum(), ((raster01 > 0) & (mask == 1)).sum()
+            
+            data = rasterDat[(raster01 > 0) & (mask == 1)]
+                
+        else:
+        
+            data = rasterDat[raster01 > 0]
 
         if self.opt.nodata:
             data = data[data != self.opt.nodata]
