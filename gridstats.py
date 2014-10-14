@@ -358,6 +358,13 @@ class ZonalStats(object):
             self.maskGC = GridClipper(gdal.Open(self.opt.mask, gdalconst.GA_ReadOnly))
         else:
             self.maskGC = None
+
+        if self.opt.nodata is None:
+            self.opt.nodata = self.grid.GetRasterBand(1).GetNoDataValue()
+            print("Using grid NoData value: %s" % self.opt.nodata)
+            self.opt.autonodata = True
+        else:
+            self.opt.autonodata = False
     def run(self):
         # get the data layer
         self.layer = self.datasource.GetLayer()
@@ -596,7 +603,13 @@ class ZonalStats(object):
             data = rasterDat[raster01 > 0]
 
         if self.opt.nodata:
-            data = data[data != self.opt.nodata]
+            if self.opt.autonodata and abs(self.opt.nodata) > 1e15:
+                if self.opt.nodata < 0:
+                    data = data[data > 0.99 * self.opt.nodata]
+                else:
+                    data = data[data < 0.99 * self.opt.nodata]
+            else:
+                data = data[data != self.opt.nodata]
         
         # exclude the grid's interpretation of NODATA
         data = data[numpy.isfinite(data)]
