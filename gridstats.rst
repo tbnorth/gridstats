@@ -3,11 +3,16 @@
 
 |gs| is a Python script using the `OSGeo` `GDAL` grid processing
 libraries and `NumPy` extensions to analyze grids in the same way
-as `Zonal Stats` and `Tabulate Areas`.
+as `Zonal Stats` and `Tabulate Areas`.  It is, thanks to 
+`GDAL <http://www.gdal.org/>`_, much faster than you would expect,
+and handles overlapping polygons.
 
-|gs| runs in the `OSGeo4W <http://trac.osgeo.org/osgeo4w/>`_
+On Windows, |gs| runs in the `OSGeo4W <http://trac.osgeo.org/osgeo4w/>`_
 environment, so install that.  Then run the `OSGeo4W` shell from
-the Start → Programs menu.
+the Start → Programs menu. On Linux etc. the required libraries are
+probably available through the package manager, e.g.::
+
+  sudo apt-get install python-gdal
 
 If you run::
 
@@ -45,6 +50,6 @@ but generally you want something like::
 
     python gridstats.py --fields=site --output=results.csv path/to/foo.shp path/to/grid
 
-The ``--nodata=<value>`` flag may be important for continuous variables
+The ``--nodata=<value>`` flag may be useful for continuous variables
 (the default mode).  ``--categorical`` mode switches to "Tabulate Areas"
 mode.
