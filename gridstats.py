@@ -116,12 +116,8 @@ class GridClipper:
         (self.xorg, self.xsz,
             dummy, self.yorg, dummy, self.ysz) = self.img.GetGeoTransform()  
 
-        self.srs = osr.SpatialReference()
-        self.srs.SetUTM(15, 1)
-        self.srs.SetWellKnownGeogCS('NAD83')
+        self.srs = osr.SpatialReference(grid.GetProjectionRef())
         self.srs_wkt = self.srs.ExportToWkt()
-
-        #X self.memrefs = []
     def get_bounds(self, geom):
         """work out the cell parameters to bound geom in our grid"""
 
@@ -400,7 +396,8 @@ class ZonalStats(object):
             if cnt == self.opt.max_records:
                 break
 
-            geom = feature.GetGeometryRef()
+            geom = feature.GetGeometryRef().Clone()
+            geom.TransformTo(self.gc.srs)
 
             output_base = [feature.GetFieldAsString(i)
                 if i != '#' else str(cnt) for i in self.opt.fields]
