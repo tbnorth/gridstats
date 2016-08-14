@@ -55,5 +55,5 @@ The ``--nodata=<value>`` flag may be useful for continuous variables
 mode.
 
 The excellent `Python GDAL/OGR Cookbook <https://pcjericks.github.io/py-gdalogr-cookbook/>`_ points to
-`raster-stats <https://github.com/perrygeo/python-raster-stats>` for Python zonal stats. I haven't
+`raster-stats <https://github.com/perrygeo/python-raster-stats>`_ for Python zonal stats. I haven't
 done a feature comparison, ``gridstats`` seems a little more vanilla OGR/GDAL perhaps.
